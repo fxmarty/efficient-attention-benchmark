@@ -8,7 +8,7 @@ Benchmark run on A100 between a PyTorch eager implementation of attention, `flas
 
 ## Results
 
-|batch_size|seq_len|headdim|nheads|PT eager (ms/forward)|PT native (ms/forward)|HazyResearch (ms/forward)|HazyResearch speedup over `scaled_dot_product_attention`|
+|bs|seqlen|headdim|nheads|PT eager (ms/forward)|PT native (ms/forward)|Hazy (ms/forward)|Hazy speedup over `scaled_dot_product_attention`|
 |----------|-------|-------|------|---------------------|----------------------|-------------------------|----------------------------------------------|
 |8         |64     |32     |12    |0.112                |0.052                 |0.042                    |1.251                                         |
 |8         |64     |32     |16    |0.106                |0.053                 |0.048                    |1.109                                         |
