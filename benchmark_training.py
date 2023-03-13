@@ -42,19 +42,20 @@ def benchmark_forward_backward(module, n_repeat: int, **kwargs):
 torch.manual_seed(0)
 n_repeat = 30
 dropout_p = 0.0
+suffix = ""
 causal = False
 dtype = torch.float16  # torch.float32 is not supported for Hazy-Research implementation
 device = "cuda"
 
-# for gpt2
-head_dim = [64]
-num_heads = [12]
+# suffix = "gpt2"
+# head_dim = [64]
+# num_heads = [12]
 
-# for EleutherAI/gpt-j-6B
-# head_dim = [256]
-# num_heads = [16]
+suffix = "gpt-j-6B"
+head_dim = [256]
+num_heads = [16]
 
-# for EleutherAI/gpt-neox-20b
+# suffix = "gpt-neox-20b"
 # head_dim = [96]
 # num_heads = [64]
 
@@ -73,8 +74,9 @@ def grid(
         returned_list = list(params)
         yield returned_list
 
-
-output_file = open("benchmark_training_attention.csv", "w")
+if suffix:
+    suffix = f"_{suffix}"
+output_file = open(f"benchmark_training_attention{suffix}.csv", "w")
 output_file.write(
     "batch_size, seq_len, headdim, nheads, PT eager (ms/forward), PT native (ms/forward), Native speedup\n"
 )
