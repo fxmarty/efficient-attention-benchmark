@@ -25,6 +25,27 @@ def attention_pytorch_native(query, key, value, is_causal=False, attn_mask=None,
     )
 
 
+def benchmark_memory(module, device, train=True, **kwargs):
+    torch.cuda.reset_max_memory_allocated(device)
+    torch.cuda.reset_peak_memory_stats(device)
+    torch.cuda.empty_cache()
+
+    torch.cuda.synchronize()
+    if train is False:
+        module = module.eval()
+        with torch.inference_mode():
+            _ = module(**kwargs)
+    else:
+        module.zero_grad()
+        res = module(**kwargs)
+        loss = res.sum()
+        loss.backward()
+    torch.cuda.synchronize()
+
+    max_memory = torch.cuda.max_memory_allocated(device)
+    return max_memory
+
+
 def benchmark_forward_backward(module, n_repeat: int, **kwargs):
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
@@ -74,11 +95,12 @@ def grid(
         returned_list = list(params)
         yield returned_list
 
+
 if suffix:
     suffix = f"_{suffix}"
 output_file = open(f"benchmark_training_attention{suffix}.csv", "w")
 output_file.write(
-    "batch_size, seq_len, headdim, nheads, PT eager (ms/forward), PT native (ms/forward), Native speedup\n"
+    "bs, seqlen, headdim, nheads, PT eager (ms/forward), PT native (ms/forward), Speedup, PT eager peak mem (MB), PT native peak mem (MB), Native mem saving\n"
 )
 
 
@@ -115,6 +137,12 @@ for params in tqdm(list(grid(all_parameters))):
         attention_func=attention_pytorch_eager,
     )
 
+    max_memory_pt_eager = benchmark_memory(
+        module=model,
+        attention_func=attention_pytorch_eager,
+        device=device,
+    )
+
     # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
     time_pt_native = benchmark_forward_backward(
         module=model,
@@ -122,11 +150,20 @@ for params in tqdm(list(grid(all_parameters))):
         attention_func=attention_pytorch_native,
     )
 
-    print(f"PT eager: {time_pt_eager:.3f} ms")
-    print(f"PT native: {time_pt_native:.3f} ms")
+    max_memory_pt_native = benchmark_memory(
+        module=model,
+        attention_func=attention_pytorch_native,
+        device=device,
+    )
+
+    max_memory_pt_eager = max_memory_pt_eager * 1e-6
+    max_memory_pt_native = max_memory_pt_native * 1e-6
+
+    print(f"PT eager: {time_pt_eager:.3f} ms, peak {max_memory_pt_eager:.2f} MB")
+    print(f"PT native: {time_pt_native:.3f} ms, peak {max_memory_pt_native:.2f} MB")
 
     output_file.write(
-        f"{batch_size},{seqlen},{headdim},{nheads},{time_pt_eager:.3f},{time_pt_native:.3f},{time_pt_eager / time_pt_native:.3f}\n"
+        f"{batch_size},{seqlen},{headdim},{nheads},{time_pt_eager:.3f},{time_pt_native:.3f},{time_pt_eager / time_pt_native:.3f},{max_memory_pt_eager:.2f},{max_memory_pt_native:.2f},{max_memory_pt_eager / max_memory_pt_native:.3f}\n"
     )
 
 output_file.close()
