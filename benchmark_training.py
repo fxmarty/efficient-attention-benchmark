@@ -25,12 +25,13 @@ def attention_pytorch_native(query, key, value, is_causal=False, attn_mask=None,
     )
 
 
-def benchmark_forward_backward(func, n_repeat: int, **kwargs):
+def benchmark_forward_backward(module, n_repeat: int, **kwargs):
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
     start_event.record()
     for _ in range(n_repeat):
-        res = func(**kwargs)
+        module.zero_grad()
+        res = module(**kwargs)
         loss = res.sum()
         loss.backward()
     end_event.record()
@@ -40,20 +41,28 @@ def benchmark_forward_backward(func, n_repeat: int, **kwargs):
 
 torch.manual_seed(0)
 n_repeat = 30
-# batch_size = 8
-# seqlen = 512
-# nheads = 12
-# headdim = 16
 dropout_p = 0.0
 causal = False
 dtype = torch.float16  # torch.float32 is not supported for Hazy-Research implementation
 device = "cuda"
 
+# for gpt2
+head_dim = [64]
+num_heads = [12]
+
+# for EleutherAI/gpt-j-6B
+# head_dim = [256]
+# num_heads = [16]
+
+# for EleutherAI/gpt-neox-20b
+# head_dim = [96]
+# num_heads = [64]
+
 all_parameters = {
-    "batch_size": [8, 16, 64],
+    "batch_size": [8, 16, 64, 128, 256, 512],
     "seq_len": [64, 128, 256, 512, 1024],
-    "head_dim": [32, 64, 128],
-    "num_heads": [12, 16, 24],
+    "head_dim": head_dim,
+    "num_heads": num_heads,
 }
 
 
@@ -99,14 +108,14 @@ for params in tqdm(list(grid(all_parameters))):
         ), f" Maxdiff: {(res_pt_eager - res_pt_native).abs().max()}"
 
     time_pt_eager = benchmark_forward_backward(
-        func=model,
+        module=model,
         n_repeat=n_repeat,
         attention_func=attention_pytorch_eager,
     )
 
     # with torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
     time_pt_native = benchmark_forward_backward(
-        func=model,
+        module=model,
         n_repeat=n_repeat,
         attention_func=attention_pytorch_native,
     )
